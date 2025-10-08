@@ -44,6 +44,11 @@ async def async_setup_entry(
     sensors = [
         FlashforgeAdventurer3StateSensor(coordinator, config),
         FlashforgeAdventurer3ProgressSensor(coordinator, config),
+        FlashforgeAdventurer3NozzleTemperatureSensor(coordinator, config),
+        FlashforgeAdventurer3BedTemperatureSensor(coordinator, config),
+        FlashforgeAdventurer3MachineStatusSensor(coordinator, config),
+        FlashforgeAdventurer3MoveModeSensor(coordinator, config),
+        FlashforgeAdventurer3CurrentFileSensor(coordinator, config),
     ]
     async_add_entities(sensors, update_before_add=True)
 
@@ -54,7 +59,7 @@ class FlashforgeAdventurer3Coordinator(DataUpdateCoordinator):
             hass,
             LOGGER,
             name='My sensor',
-            update_interval=timedelta(seconds=60),
+            update_interval=timedelta(seconds=20),
         )
         self.ip = printer_definition['ip_address']
         self.port = printer_definition['port']
@@ -152,3 +157,131 @@ class FlashforgeAdventurer3ProgressSensor(BaseFlashforgeAdventurer3Sensor):
     @property
     def unit_of_measurement(self) -> str:
         return '%'
+
+class FlashforgeAdventurer3NozzleTemperatureSensor(BaseFlashforgeAdventurer3Sensor):
+    @property
+    def name(self) -> str:
+        return f'{super().name} nozzle temperature'
+
+    @property
+    def unique_id(self) -> str:
+        return f'{super().unique_id}_nozzle_temperature'
+
+    @property
+    def available(self) -> bool:
+        return bool(self.attrs.get('online'))
+
+    @property
+    def state(self) -> Optional[str]:
+        return self.attrs.get('nozzle_temperature', 0)
+
+    @property
+    def icon(self) -> str:
+        return 'mdi:printer-3d-nozzle-heat'
+
+    @property
+    def unit_of_measurement(self) -> str:
+        return '°C'
+
+class FlashforgeAdventurer3BedTemperatureSensor(BaseFlashforgeAdventurer3Sensor):
+    @property
+    def name(self) -> str:
+        return f'{super().name} bed temperature'
+
+    @property
+    def unique_id(self) -> str:
+        return f'{super().unique_id}_bed_temperature'
+
+    @property
+    def available(self) -> bool:
+        return bool(self.attrs.get('online'))
+
+    @property
+    def state(self) -> Optional[str]:
+        return self.attrs.get('bed_temperature', 0)
+
+    @property
+    def icon(self) -> str:
+        return 'mdi:heating-coil'
+
+    @property
+    def unit_of_measurement(self) -> str:
+        return '°C'
+
+class FlashforgeAdventurer3MachineStatusSensor(BaseFlashforgeAdventurer3Sensor):
+    @property
+    def name(self) -> str:
+        return f'{super().name} machine status'
+
+    @property
+    def unique_id(self) -> str:
+        return f'{super().unique_id}_machine_status'
+
+    @property
+    def available(self) -> bool:
+        return bool(self.attrs.get('online'))
+
+    @property
+    def state(self) -> Optional[str]:
+        return self.attrs.get('machine_status', 0)
+
+    @property
+    def icon(self) -> str:
+        return 'mdi:printer-3d'
+
+class FlashforgeAdventurer3MoveModeSensor(BaseFlashforgeAdventurer3Sensor):
+    @property
+    def name(self) -> str:
+        return f'{super().name} move mode'
+
+    @property
+    def unique_id(self) -> str:
+        return f'{super().unique_id}_move_mode'
+
+    @property
+    def available(self) -> bool:
+        return bool(self.attrs.get('online'))
+
+    @property
+    def state(self) -> Optional[str]:
+        return self.attrs.get('move_mode', 0)
+
+    @property
+    def icon(self) -> str:
+        return 'mdi:printer-3d-nozzle'
+
+class FlashforgeAdventurer3CurrentFileSensor(BaseFlashforgeAdventurer3Sensor):
+    @property
+    def name(self) -> str:
+        return f'{super().name} current file'
+
+    @property
+    def unique_id(self) -> str:
+        return f'{super().unique_id}_current_file'
+
+    @property
+    def available(self) -> bool:
+        return bool(self.attrs.get('online'))
+
+    @property
+    def state(self) -> Optional[str]:
+        return self.attrs.get('current_file', 0)
+
+    @property
+    def icon(self) -> str:
+        return 'mdi:file'
+
+
+
+
+"""
+response['printing'] = bool(desired_nozzle_temperature and desired_bed_temperature)
+        response['nozzle_temperature'] = float(temperature_match.group(1))
+        response['desired_nozzle_temperature'] = desired_nozzle_temperature
+        response['bed_temperature'] = float(temperature_match.group(3))
+        response['desired_bed_temperature'] = desired_bed_temperature
+    status_match = STATUS_REGEX.match(status_info)
+    if status_match:
+        response['MachineStatus'] = status_match.group(1)
+        response['MoveMode'] = status_match.group(2)
+        """
