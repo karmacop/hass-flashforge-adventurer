@@ -23,4 +23,4 @@ address in your router settings.
 ## Printer compatibility
 
 I own the Adventurer 5 printer at the moment, so that's the model which is 100%
-supported. This has been forked from [[HACS](https://github.com/modrzew/hass-flashforge-adventurer-3)]([https://hacs.xyz/](https://github.com/modrzew/hass-flashforge-adventurer-3)) so I'm not sure how far back these same commands work. Maybe it'll work with 3 and 4.
+supported. This has been forked from [https://github.com/modrzew/hass-flashforge-adventurer-3](https://github.com/modrzew/hass-flashforge-adventurer-3) so I'm not sure how far back these same commands work. Maybe it'll work with 3 and 4.
