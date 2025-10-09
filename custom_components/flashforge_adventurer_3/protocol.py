@@ -41,12 +41,20 @@ class PrinterStatus(TypedDict):
     extruder_count: Optional[str]
     mac: Optional[str]
 
-async def send_msg(reader: StreamReader, writer: StreamWriter, payload: str):
+async def send_msg(reader: StreamReader, writer: StreamWriter, payload: str) -> Optional[str]:
+     """Send a payload to the printer and wait for a response.
+
+    Returns ``None`` if the printer does not respond within ``TIMEOUT_SECONDS``
+    or the coroutine is cancelled.
+    """
     msg = f'{payload}\r\n'
-    writer.write(msg.encode())
-    logger.debug(f'Sent "{payload}" to the printer')
-    await writer.drain()
-    result = await reader.read(BUFFER_SIZE)
+    try:
+        result = await asyncio.wait_for(
+            reader.read(BUFFER_SIZE), timeout=TIMEOUT_SECONDS
+        )
+    except (asyncio.TimeoutError, asyncio.CancelledError):
+        logger.warning(f'Timeout waiting for response to {payload}')
+        return None
     logger.debug(f'Response from the printer: {result}')
     return result.decode()
 
