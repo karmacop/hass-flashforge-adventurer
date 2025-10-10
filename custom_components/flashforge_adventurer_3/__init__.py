@@ -69,6 +69,7 @@ async def async_setup(hass: core.HomeAssistant, config: dict) -> bool:
     hass.data.setdefault(DOMAIN, {})
 
     # 1. Start the UDP Listener Task
+    logger.warning("Starting UDP Listener")
     hass.loop.create_task(flashforge_discovery(hass))
     
     return True
@@ -81,8 +82,12 @@ async def flashforge_discovery(hass: HomeAssistant):
     
     # The printer may broadcast to a multicast address (e.g., 255.0.0.9)
     # or just to the broadcast address (255.255.255.255). We bind to the discovery port.
+
+    
+    local_ip = sock.gethostbyname(socket.gethostname())
+    logger.warning(f"trying {local_ip} on port {DISCOVERY_PORT}")
     try:
-        sock.bind((sock.gethostbyname(socket.gethostname()), DISCOVERY_PORT))
+        sock.bind(local_ip, DISCOVERY_PORT)
     except OSError as err:
         logger.error("Failed to bind UDP socket on port {DISCOVERY_PORT}: {err}")
         return
@@ -94,6 +99,7 @@ async def flashforge_discovery(hass: HomeAssistant):
             # Use hass.loop.sock_recvfrom for non-blocking asynchronous I/O
             data, addr = await hass.loop.sock_recvfrom(sock, 1024)
             host = addr[0]
+            logger.warning(f"got response from {host}")
 
             # 2. Process the received data
             # The 'data' payload will be the custom Flashforge ID packet.
