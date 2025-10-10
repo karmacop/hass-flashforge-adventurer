@@ -1,7 +1,7 @@
 {
   "domain": "flashforge_adventurer",
   "name": "FlashForge Adventurer",
-  "codeowners": ["@modrzew"],
+  "codeowners": ["@karmacop"],
   "config_flow": true,
   "dependencies": [],
   "documentation": "https://github.com/karmacop/hass-flashforge-adventurer/",
