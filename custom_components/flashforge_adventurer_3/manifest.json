@@ -1,12 +1,12 @@
 {
-  "domain": "flashforge_adventurer_3",
-  "name": "FlashForge Adventurer 3",
+  "domain": "flashforge_adventurer",
+  "name": "FlashForge Adventurer",
   "codeowners": ["@modrzew"],
   "config_flow": true,
   "dependencies": [],
-  "documentation": "https://github.com/modrzew/hass-flashforge-adventurer-3/",
+  "documentation": "https://github.com/karmacop/hass-flashforge-adventurer/",
   "iot_class": "local_polling",
-  "issue_tracker": "https://github.com/modrzew/hass-flashforge-adventurer-3/issues",
-  "requirements": [],
+  "issue_tracker": "https://github.com/karmacop/hass-flashforge-adventurer/issues",
+  "requirements": ["network"],
   "version": "1.0.0"
 }
