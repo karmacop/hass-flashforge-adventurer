@@ -8,7 +8,19 @@
           "ip_address": "IP Address",
           "port": "Port (default: 8899)"
         }
+      },
+      "discovery_confirm": {
+        "title": "Discovered FlashForge Printer",
+        "description": "Do you want to set up the FlashForge printer discovered at {host}?"
       }
+    },
+    "error": {
+      "cannot_connect": "Failed to connect",
+      "unknown": "Unexpected error"
+    },
+    "abort": {
+      "already_configured": "Device is already configured",
+      "no_host_provided": "No host was provided by discovery"
     }
   }
 }
