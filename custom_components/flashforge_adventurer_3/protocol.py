@@ -1,11 +1,11 @@
 import asyncio
-from codecs import StreamReader, StreamWriter
+from asyncio.streams import StreamReader, StreamWriter
 import logging
 import os
 import re
 from typing import Optional, Tuple, TypedDict
 
-logger = logging.getLogger(__name__)
+_LOGGER = logging.getLogger(__name__)
 
 BUFFER_SIZE = 1024
 TIMEOUT_SECONDS = 5
@@ -16,9 +16,9 @@ INFO_COMMAND = '~M115'
 CURRENT_POSITION = '~M114'
 STATUS = '~M119'
 
-STATUS_REPLY_REGEX = re.compile('CMD M27 Received\.\r\nSD printing byte (\d+)\/(\d+)\r\nLayer: (\d+)\/(\d+)\r\n(.*?)ok\r\n')
-TEMPERATURE_REPLY_REGEX = re.compile('CMD M105 Received\.\r\nT0:(\d+\.?\d*)\/(\d+\.?\d*) T1:(\d+\.?\d*)\/(\d+\.?\d*) B:(\d+\.?\d*)\/(\d+\.?\d*)\r\nok\r\n')
-STATUS_REGEX = re.compile('CMD M119 Received.\r\nEndstop: X-max: \d+ Y-max: \d+ Z-min: \d+\r\nMachineStatus: ([\w\s]+)\r\nMoveMode: ([\w\s]+)\r\nStatus: S:\d+ L:\d+ J:\d+ F:\d+\r\nLED: \d+\r\nCurrentFile: (.*?)\r\nok\r\n')
+STATUS_REPLY_REGEX = re.compile(r'CMD M27 Received\.\r\nSD printing byte (\d+)\/(\d+)\r\nLayer: (\d+)\/(\d+)\r\n(.*?)ok\r\n')
+TEMPERATURE_REPLY_REGEX = re.compile(r'CMD M105 Received\.\r\nT0:(\d+\.?\d*)\/(\d+\.?\d*) T1:(\d+\.?\d*)\/(\d+\.?\d*) B:(\d+\.?\d*)\/(\d+\.?\d*)\r\nok\r\n')
+STATUS_REGEX = re.compile(r'CMD M119 Received.\r\nEndstop: X-max: \d+ Y-max: \d+ Z-min: \d+\r\nMachineStatus: ([\w\s]+)\r\nMoveMode: ([\w\s]+)\r\nStatus: S:\d+ L:\d+ J:\d+ F:\d+\r\nLED: \d+\r\nCurrentFile: (.*?)\r\nok\r\n')
 PRINTER_INFO_REGEX = re.compile(r'CMD M115 Received.\r\nMachine Type: (.*?)\r\nMachine Name: (.*?)\r\nFirmware: (.*?)\r\nSN: (.*?)\r\nX: (\d+) Y: (\d+) Z: (\d+)\r\nTool Count: (\d+)\r\nMac Address:(.*?)\n \r\nok\r\n')
 
 class PrinterStatus(TypedDict):
@@ -42,73 +42,86 @@ class PrinterStatus(TypedDict):
     mac: Optional[str]
 
 async def send_msg(reader: StreamReader, writer: StreamWriter, payload: str) -> Optional[str]:
-     """Send a payload to the printer and wait for a response.
+    """Send a payload to the printer and wait for a response.
 
     Returns ``None`` if the printer does not respond within ``TIMEOUT_SECONDS``
     or the coroutine is cancelled.
     """
     msg = f'{payload}\r\n'
     try:
+        writer.write(msg.encode('utf-8'))
+        await writer.drain()
+
         result = await asyncio.wait_for(
             reader.read(BUFFER_SIZE), timeout=TIMEOUT_SECONDS
         )
-    except (asyncio.TimeoutError, asyncio.CancelledError):
-        logger.warning(f'Timeout waiting for response to {payload}')
+    except (asyncio.TimeoutError, asyncio.CancelledError) as e:
+        _LOGGER.warning(f'Timeout waiting for response to {payload}: {e}')
         return None
-    logger.debug(f'Response from the printer: {result}')
-    return result.decode()
+    _LOGGER.debug(f'Response from the printer: {result}')
+    return result.decode('utf-8', errors='ignore')
 
 
 async def collect_data(ip: str, port: int) -> Tuple[PrinterStatus, Optional[str], Optional[str], Optional[str], Optional[str]]:
-    future = asyncio.open_connection(ip, port)
+    _LOGGER.warning(f'FLASH FORGE: {ip} : {port}')
+    
     try:
+        future = asyncio.open_connection(ip, port)
         reader, writer = await asyncio.wait_for(future, timeout=TIMEOUT_SECONDS)
-    except (asyncio.TimeoutError, OSError):
+    except (asyncio.TimeoutError, OSError) as e:
+        _LOGGER.warning(f"Failed to connect to printer at {ip}:{port} - {e}")
         return { 'online': False }, None, None, None, None
     response: PrinterStatus = { 'online': True }
-    await send_msg(reader, writer, STATUS_COMMAND)
+
+    #status_cmd_reply = await send_msg(reader, writer, STATUS_COMMAND)
     print_job_info = await send_msg(reader, writer, PRINT_JOB_INFO_COMMAND)
     temperature_info = await send_msg(reader, writer, TEMPERATURE_COMMAND)
     status_info = await send_msg(reader, writer, STATUS)
-    printer_info = await send_msg(reader, writer, PRINTER_INFO_COMMAND)
+    printer_info = await send_msg(reader, writer, INFO_COMMAND)
+    
     writer.close()
     await writer.wait_closed()
+    
     return response, print_job_info, temperature_info, status_info, printer_info
 
 
 def parse_data(response: PrinterStatus, print_job_info: str, temperature_info: str, status_info:str, printer_info:str) -> PrinterStatus:
-    print_job_info_match = STATUS_REPLY_REGEX.match(print_job_info)
-    if print_job_info_match:
-        response['progress'] = int(print_job_info_match.group(1))
+    if print_job_info:
+        print_job_info_match = STATUS_REPLY_REGEX.match(print_job_info)
+        if print_job_info_match:
+            response['progress'] = int(print_job_info_match.group(1))
     
-    temperature_match = TEMPERATURE_REPLY_REGEX.match(temperature_info)
-    if temperature_match:
-        # Printer is printing if desired temperatures are greater than zero. If not, it's paused.
-        desired_nozzle_temperature = float(temperature_match.group(2))
-        desired_bed_temperature = float(temperature_match.group(4))
-        response['printing'] = bool(desired_nozzle_temperature and desired_bed_temperature)
-        response['nozzle_temperature'] = float(temperature_match.group(1))
-        response['desired_nozzle_temperature'] = desired_nozzle_temperature
-        response['bed_temperature'] = float(temperature_match.group(3))
-        response['desired_bed_temperature'] = desired_bed_temperature
+    if temperature_info:
+        temperature_match = TEMPERATURE_REPLY_REGEX.match(temperature_info)
+        if temperature_match:
+            # Printer is printing if desired temperatures are greater than zero. If not, it's paused.
+            desired_nozzle_temperature = float(temperature_match.group(2))
+            desired_bed_temperature = float(temperature_match.group(4))
+            response['printing'] = bool(desired_nozzle_temperature and desired_bed_temperature)
+            response['nozzle_temperature'] = float(temperature_match.group(1))
+            response['desired_nozzle_temperature'] = desired_nozzle_temperature
+            response['bed_temperature'] = float(temperature_match.group(3))
+            response['desired_bed_temperature'] = desired_bed_temperature
     
-    status_match = STATUS_REGEX.match(status_info)
-    if status_match:
-        response['machine_status'] = status_match.group(1)
-        response['move_mode'] = status_match.group(2)
-        response['current_file'] = status_match.group(3)
+    if status_info:
+        status_match = STATUS_REGEX.match(status_info)
+        if status_match:
+            response['machine_status'] = status_match.group(1)
+            response['move_mode'] = status_match.group(2)
+            response['current_file'] = status_match.group(3)
     
-    printer_info_match = PRINTER_INFO_REGEX.match(printer_info)
-    if printer_info_match:
-        response['type'] = str(printer_info_match.group(1))
-        response['name'] = str(printer_info_match.group(2))
-        response['fw'] = str(printer_info_match.group(3))
-        response['sn'] = str(printer_info_match.group(4))
-        response['max_x'] = int(printer_info_match.group(5))
-        response['max_y'] = int(printer_info_match.group(6))
-        response['max_z'] = int(printer_info_match.group(7))
-        response['extruder_count'] = str(printer_info_match.group(8))
-        response['mac'] = str(printer_info_match.group(9))
+    if printer_info:
+        printer_info_match = PRINTER_INFO_REGEX.match(printer_info)
+        if printer_info_match:
+            response['type'] = str(printer_info_match.group(1))
+            response['name'] = str(printer_info_match.group(2))
+            response['fw'] = str(printer_info_match.group(3))
+            response['sn'] = str(printer_info_match.group(4))
+            response['max_x'] = int(printer_info_match.group(5))
+            response['max_y'] = int(printer_info_match.group(6))
+            response['max_z'] = int(printer_info_match.group(7))
+            response['extruder_count'] = str(printer_info_match.group(8))
+            response['mac'] = str(printer_info_match.group(9))
     
     return response
 
