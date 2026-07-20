@@ -2,7 +2,7 @@ from datetime import timedelta
 import logging
 from typing import Any, Callable, Dict, Optional, TypedDict
 
-import async_timeout
+import asyncio
 from homeassistant import config_entries, core
 from homeassistant.components.sensor import PLATFORM_SCHEMA
 from homeassistant.core import callback
@@ -39,21 +39,21 @@ async def async_setup_entry(
     config = hass.data[DOMAIN][config_entry.entry_id]
     if config_entry.options:
         config.update(config_entry.options)
-    coordinator = FlashforgeAdventurer3Coordinator(hass, config)
+    coordinator = FlashforgeCoordinator(hass, config)
     await coordinator.async_config_entry_first_refresh()
     sensors = [
-        FlashforgeAdventurer3StateSensor(coordinator, config),
-        FlashforgeAdventurer3ProgressSensor(coordinator, config),
-        FlashforgeAdventurer3NozzleTemperatureSensor(coordinator, config),
-        FlashforgeAdventurer3BedTemperatureSensor(coordinator, config),
-        FlashforgeAdventurer3MachineStatusSensor(coordinator, config),
-        FlashforgeAdventurer3MoveModeSensor(coordinator, config),
-        FlashforgeAdventurer3CurrentFileSensor(coordinator, config),
+        FlashforgeStateSensor(coordinator, config),
+        FlashforgeProgressSensor(coordinator, config),
+        FlashforgeNozzleTemperatureSensor(coordinator, config),
+        FlashforgeBedTemperatureSensor(coordinator, config),
+        FlashforgeMachineStatusSensor(coordinator, config),
+        FlashforgeMoveModeSensor(coordinator, config),
+        FlashforgeCurrentFileSensor(coordinator, config),
     ]
     async_add_entities(sensors, update_before_add=True)
 
 
-class FlashforgeAdventurer3Coordinator(DataUpdateCoordinator):
+class FlashforgeCoordinator(DataUpdateCoordinator):
     def __init__(self, hass, printer_definition: PrinterDefinition):
         super().__init__(
             hass,
@@ -65,21 +65,21 @@ class FlashforgeAdventurer3Coordinator(DataUpdateCoordinator):
         self.port = printer_definition['port']
 
     async def _async_update_data(self):
-        async with async_timeout.timeout(5):
+        async with asyncio.timeout(5):
             return await get_print_job_status(self.ip, self.port)
 
 
-class FlashforgeAdventurer3CommonPropertiesMixin:
+class FlashforgeCommonPropertiesMixin:
     @property
     def name(self) -> str:
-        return f'FlashForge Adventurer 3'
+        return f'FlashForge'
 
     @property
     def unique_id(self) -> str:
-        return f'flashforge_adventurer_3_{self.ip}'
+        return f'flashforge_{self.ip}'
 
 
-class BaseFlashforgeAdventurer3Sensor(FlashforgeAdventurer3CommonPropertiesMixin, CoordinatorEntity, Entity):
+class BaseFlashforgeSensor(FlashforgeCommonPropertiesMixin, CoordinatorEntity, Entity):
     def __init__(self, coordinator: DataUpdateCoordinator, printer_definition: PrinterDefinition) -> None:
         super().__init__(coordinator)
         self.ip = printer_definition['ip_address']
@@ -105,7 +105,7 @@ class BaseFlashforgeAdventurer3Sensor(FlashforgeAdventurer3CommonPropertiesMixin
         self.async_write_ha_state()
 
 
-class FlashforgeAdventurer3StateSensor(BaseFlashforgeAdventurer3Sensor):
+class FlashforgeStateSensor(BaseFlashforgeSensor):
     @property
     def name(self) -> str:
         return f'{super().name} state'
@@ -133,7 +133,7 @@ class FlashforgeAdventurer3StateSensor(BaseFlashforgeAdventurer3Sensor):
         return 'mdi:printer-3d'
 
 
-class FlashforgeAdventurer3ProgressSensor(BaseFlashforgeAdventurer3Sensor):
+class FlashforgeProgressSensor(BaseFlashforgeSensor):
     @property
     def name(self) -> str:
         return f'{super().name} progress'
@@ -158,7 +158,7 @@ class FlashforgeAdventurer3ProgressSensor(BaseFlashforgeAdventurer3Sensor):
     def unit_of_measurement(self) -> str:
         return '%'
 
-class FlashforgeAdventurer3NozzleTemperatureSensor(BaseFlashforgeAdventurer3Sensor):
+class FlashforgeNozzleTemperatureSensor(BaseFlashforgeSensor):
     @property
     def name(self) -> str:
         return f'{super().name} nozzle temperature'
@@ -183,7 +183,7 @@ class FlashforgeAdventurer3NozzleTemperatureSensor(BaseFlashforgeAdventurer3Sens
     def unit_of_measurement(self) -> str:
         return '°C'
 
-class FlashforgeAdventurer3BedTemperatureSensor(BaseFlashforgeAdventurer3Sensor):
+class FlashforgeBedTemperatureSensor(BaseFlashforgeSensor):
     @property
     def name(self) -> str:
         return f'{super().name} bed temperature'
@@ -208,7 +208,7 @@ class FlashforgeAdventurer3BedTemperatureSensor(BaseFlashforgeAdventurer3Sensor)
     def unit_of_measurement(self) -> str:
         return '°C'
 
-class FlashforgeAdventurer3MachineStatusSensor(BaseFlashforgeAdventurer3Sensor):
+class FlashforgeMachineStatusSensor(BaseFlashforgeSensor):
     @property
     def name(self) -> str:
         return f'{super().name} machine status'
@@ -229,7 +229,7 @@ class FlashforgeAdventurer3MachineStatusSensor(BaseFlashforgeAdventurer3Sensor):
     def icon(self) -> str:
         return 'mdi:printer-3d'
 
-class FlashforgeAdventurer3MoveModeSensor(BaseFlashforgeAdventurer3Sensor):
+class FlashforgeMoveModeSensor(BaseFlashforgeSensor):
     @property
     def name(self) -> str:
         return f'{super().name} move mode'
@@ -250,7 +250,7 @@ class FlashforgeAdventurer3MoveModeSensor(BaseFlashforgeAdventurer3Sensor):
     def icon(self) -> str:
         return 'mdi:printer-3d-nozzle'
 
-class FlashforgeAdventurer3CurrentFileSensor(BaseFlashforgeAdventurer3Sensor):
+class FlashforgeCurrentFileSensor(BaseFlashforgeSensor):
     @property
     def name(self) -> str:
         return f'{super().name} current file'
