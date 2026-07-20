@@ -2,9 +2,13 @@
 
 A custom Home Assistant integration for the FlashForge Adventurer 5 printer.
 
-It adds three entities:
+It adds multiple entities:
 
-- state, together with nozzle and bed temperatures available as attributes
+- machine state
+- nozzle temperature
+- bed temperature
+- print head move mode
+- current print job name
 - current print job's progress
 - camera feed
 
@@ -15,10 +19,9 @@ It adds three entities:
 You can install it through [HACS](https://hacs.xyz/). Alternatively, you can
 download this repo and add it to your `custom_components` directory.
 
-After the integration is installed, go to Settings -> Integrations, and
-configure it through the _Add integration_ button. You will need to provide the
-IP address of the printer. It might be a good idea to assign it a static IP
-address in your router settings.
+After the integration is installed, go to Settings -> Devices & servies -> Integrations, and
+configure it through the _Add integration_ button. If your printer is on it should be able to discover the IP address otherwise you will need to provide the
+IP address of the printer. It might be a good idea to assign it a static IP address in your router settings.
 
 ## Printer compatibility
 
