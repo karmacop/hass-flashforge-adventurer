@@ -4,10 +4,11 @@ from homeassistant import config_entries, core
 from homeassistant.exceptions import ConfigEntryNotReady
 from .const import DOMAIN
 
-from homeassistant.core import HomeAssistant
-from homeassistant.helpers.discovery import async_load_platform
-from homeassistant.config_entries import SOURCE_DISCOVERY
+#from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import ConfigEntryNotReady
+from homeassistant.helpers import discovery
 
+import re
 
 import logging
 
@@ -28,27 +29,49 @@ class FlashforgeDiscoveryProtocol(asyncio.DatagramProtocol):
     def datagram_received(self, data, addr):
         host = addr[0]
         try:
-            # Decode the response, adjust errors as needed based on printer output
             response = data.decode('utf-8', errors='ignore')
-            _LOGGER.debug(f"Flashforge discovery response from {host}: {response}")
+            _LOGGER.debug(f"Flashforge discovery response from {host}")
             
-            # The python script just dumped the response. You might want to parse it here
-            # to extract a serial number or mac address for a better unique_id.
-            # For now, we will pass the host IP to the config flow.
+            # The packet is padded with null bytes (\x00).
+            parts = [part for part in response.split('\x00') if part]
             
+            if not parts:
+                return
+                
+            # The first non-empty part is the model name
+            model_name = parts[0].strip()
+            
+            # The serial number (SN...) is the next significant string block
+            serial_number = None
+            for part in parts[1:]:
+                # Look for the SN prefix within the remaining parts
+                sn_match = re.search(r'(SN[A-Z0-9]+)', part)
+                if sn_match:
+                    serial_number = sn_match.group(1)
+                    break
+                    
+            if not serial_number:
+                _LOGGER.debug(f"Could not find Serial Number in response from {host}")
+
+            _LOGGER.info(f"Discovered Flashforge: Model '{model_name}', SN '{serial_number}' at {host}")
+
             # Trigger the config flow discovery step
             self.hass.async_create_task(
                 self.hass.config_entries.flow.async_init(
                     DOMAIN,
-                    context={"source": config_entries.SOURCE_DISCOVERY},
-                    data={"host": host}
+                    context={"source": "discovery"},
+                    data={
+                        "host": host, 
+                        "serial": serial_number, 
+                        "model": model_name
+                    }
                 )
             )
         except Exception as e:
             _LOGGER.warning(f"Error processing discovery response from {host}: {e}")
 
 async def async_setup(hass: core.HomeAssistant, config: dict) -> bool:
-    """Set up the FlashForge integration."""
+    # Set up the FlashForge integration.
     _LOGGER.debug("Setting up FlashForge Adventurer integration")
     hass.data.setdefault(DOMAIN, {})
 
@@ -67,7 +90,7 @@ async def start_active_discovery(hass: core.HomeAssistant):
         transport = None
         try:
              # Find local IP to bind to
-            local_ip = socket.gethostbyname(socket.gethostname())
+            local_ip = "0.0.0.0"
             
             # Create a socket for sending/receiving
             sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
@@ -117,12 +140,9 @@ async def async_setup_entry(
     hass: core.HomeAssistant, entry: config_entries.ConfigEntry
 ) -> bool:
     _LOGGER.warning(f"Setting up entry for {entry.title}")
-    """Set up platform from a ConfigEntry."""
-    hass.data.setdefault(DOMAIN, {})
+    # Set up platform from a ConfigEntry.
     hass_data = dict(entry.data)
-    # Registers update listener to update config entry when options are updated.
     unsub_options_update_listener = entry.add_update_listener(options_update_listener)
-    # Store a reference to the unsubscribe function to cleanup if an entry is unloaded.
     hass_data['unsub_options_update_listener'] = unsub_options_update_listener
     hass.data[DOMAIN][entry.entry_id] = hass_data
 
@@ -137,18 +157,18 @@ async def async_setup_entry(
 async def options_update_listener(
     hass: core.HomeAssistant, config_entry: config_entries.ConfigEntry
 ):
-    """Handle options update."""
+    # Handle options update.
     await hass.config_entries.async_reload(config_entry.entry_id)
 
 
 async def async_unload_entry(
     hass: core.HomeAssistant, entry: config_entries.ConfigEntry
 ) -> bool:
-    """Unload a config entry."""
+    # Unload a config entry.
     unload_ok = all(
         await asyncio.gather(
-            *[hass.config_entries.async_forward_entry_unload(entry, 'sensor')],
-            *[hass.config_entries.async_forward_entry_unload(entry, 'camera')],
+            hass.config_entries.async_forward_entry_unload(entry, 'sensor'),
+            hass.config_entries.async_forward_entry_unload(entry, 'camera'),
         )
     )
     # Remove options_update_listener.
@@ -159,16 +179,3 @@ async def async_unload_entry(
         hass.data[DOMAIN].pop(entry.entry_id)
 
     return unload_ok
-
-
-async def async_setup(hass: core.HomeAssistant, config: dict) -> bool:
-    _LOGGER.warning("async_setup")
-    hass.data.setdefault(DOMAIN, {})
-
-    # 1. Start the UDP Listener Task
-    _LOGGER.warning("Starting UDP Listener2")
-    hass.loop.create_task(flashforge_discovery(hass))
-    
-    return True
-
-
